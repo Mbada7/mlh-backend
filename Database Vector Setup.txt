@@ -2,7 +2,7 @@ Database Vector Setup
 
 
 # 1 Go to temp folder
-cd C: \Users \hp \AppData \Local\Temp or cd %TEMP%
+cd C: \Users\hp\AppData\Local\Temp or cd %TEMP%
 
 # 2. Clone pgvector (if not already there
 git clone --branch v0.8.2 https://github.com/pgvector/pgvector.git
@@ -11,7 +11,7 @@ git clone --branch v0.8.2 https://github.com/pgvector/pgvector.git
 cd pgvector
 
 # 4. Set PostgreSQL root
-set "PGROOT=C: \Program Files \PostgreSQL\18"
+set "PGROOT=C:\Program Files\PostgreSQL\18"
 
 # 5. Compile
 nmake /FMakefile.win
