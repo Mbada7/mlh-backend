@@ -1,4 +1,3 @@
-# app/services/notification_service.py
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -6,15 +5,10 @@ from app.models.notification import Notification
 from app.models.course import Course, Enrollment
 from app.models.user import User
 from app.models.video import Video
-
-
 class NotificationService:
     def __init__(self, db: Session):
         self.db = db
 
-    # ------------------------------------------------------------------ #
-    #  Create helpers                                                      #
-    # ------------------------------------------------------------------ #
 
     def _create(self, user_id: int, type: str, title: str, message: str,
                 video_id: Optional[int] = None, course_id: Optional[int] = None) -> Notification:
@@ -29,9 +23,6 @@ class NotificationService:
         self.db.add(n)
         return n
 
-    # ------------------------------------------------------------------ #
-    #  Business triggers                                                   #
-    # ------------------------------------------------------------------ #
 
     def notify_video_pending(self, video: Video):
         """Notify the course lecturer that a student video needs approval."""
@@ -125,21 +116,17 @@ class NotificationService:
             )
         self.db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  Query helpers                                                       #
-    # ------------------------------------------------------------------ #
-
     def get_user_notifications(self, user_id: int, skip: int = 0,
                                limit: int = 50, unread_only: bool = False) -> List[Notification]:
         q = self.db.query(Notification).filter(Notification.user_id == user_id)
         if unread_only:
-            q = q.filter(Notification.is_read == False)
+            q = q.filter(not Notification.is_read)
         return q.order_by(desc(Notification.created_at)).offset(skip).limit(limit).all()
 
     def get_unread_count(self, user_id: int) -> int:
         return self.db.query(Notification).filter(
             Notification.user_id == user_id,
-            Notification.is_read == False,
+            not Notification.is_read,
         ).count()
 
     def mark_read(self, notification_id: int, user_id: int) -> bool:
@@ -156,6 +143,6 @@ class NotificationService:
     def mark_all_read(self, user_id: int):
         self.db.query(Notification).filter(
             Notification.user_id == user_id,
-            Notification.is_read == False,
+            not Notification.is_read,
         ).update({"is_read": True})
         self.db.commit()

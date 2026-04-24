@@ -570,7 +570,7 @@ class VideoService:
         """Get all videos uploaded by a user"""
         videos = self.db.query(Video).filter(
             Video.uploaded_by_user_id == user_id,
-            Video.is_published == True
+            Video.is_published
         ).order_by(desc(Video.created_at)).offset(skip).limit(limit).all()
         
         return videos
@@ -673,7 +673,7 @@ class VideoService:
         pending_videos = self.db.query(Video).filter(
             Video.course_id.in_(course_ids),
             Video.approval_status == "pending",
-            Video.is_published == False
+            not Video.is_published
         ).order_by(Video.created_at).offset(skip).limit(limit).all()
         
         return pending_videos

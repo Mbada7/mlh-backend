@@ -14,10 +14,6 @@ from app.services.video_service import VideoService
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
 
-# ═══════════════════════════════════════════════════════════════
-#  STATIC / COLLECTION ROUTES  (must be declared BEFORE /{video_id})
-# ═══════════════════════════════════════════════════════════════
-
 @router.post("/upload", response_model=VideoResponse)
 async def upload_video(
     title: str = Form(...),
@@ -150,7 +146,7 @@ async def get_course_videos_by_id(
     """Get all published videos for a course"""
     videos = db.query(Video).filter(
         Video.course_id == course_id,
-        Video.is_published == True
+        Video.is_published
     ).order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
 
     from app.core.config import settings

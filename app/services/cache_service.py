@@ -1,13 +1,7 @@
-# app/services/cache_service.py
-# Redis-backed cache with automatic in-memory fallback when Redis is unavailable.
-# This means the app works perfectly without a running Redis server —
-# it just loses cross-process caching and TTL enforcement (acceptable for dev).
-
 import pickle
 import time
 from typing import Any, Optional
 from app.core.config import settings
-
 
 class _MemoryCache:
     """Simple in-process dict cache used when Redis is unavailable."""
@@ -77,9 +71,6 @@ class CacheService:
         """Return whichever backend is active."""
         return self._redis if self._redis is not None else self._mem
 
-    # ------------------------------------------------------------------ #
-    #  Public API                                                          #
-    # ------------------------------------------------------------------ #
 
     async def get(self, key: str) -> Optional[Any]:
         try:

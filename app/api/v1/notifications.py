@@ -1,7 +1,6 @@
 # app/api/v1/notifications.py
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List
 from app.core.database import get_db
 from app.core.security import get_current_active_user
 from app.models.user import User

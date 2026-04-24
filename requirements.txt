@@ -46,6 +46,7 @@ nltk==3.8.1
 numpy==1.26.4
 packaging==26.0
 passlib==1.7.4
+pgvector==0.4.2
 pluggy==1.6.0
 preshed==3.0.12
 prompt_toolkit==3.0.52
