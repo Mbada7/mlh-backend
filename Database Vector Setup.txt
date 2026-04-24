@@ -1,0 +1,29 @@
+Database Vector Setup
+
+
+# 1 Go to temp folder
+cd C: \Users \hp \AppData \Local\Temp or cd %TEMP%
+
+# 2. Clone pgvector (if not already there
+git clone --branch v0.8.2 https://github.com/pgvector/pgvector.git
+
+# 3. Enter the pgvector folder
+cd pgvector
+
+# 4. Set PostgreSQL root
+set "PGROOT=C: \Program Files \PostgreSQL\18"
+
+# 5. Compile
+nmake /FMakefile.win
+
+# 6. Install
+nmake /FMakefile.win install
+
+# 7. Navigate to database
+psql -U postgres -d academic_db
+
+# 8. Enter database credentials
+password
+
+# 9.
+CREATE EXTENSION vector;
