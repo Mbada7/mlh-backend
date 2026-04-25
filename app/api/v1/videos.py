@@ -1,6 +1,7 @@
 # app/api/v1/videos.py
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -241,17 +242,20 @@ async def get_watch_progress(
     }
 
 
+class WatchProgressUpdate(BaseModel):
+    watch_percentage: float = 0.0
+    watch_duration: int = 0
+
 @router.post("/{video_id}/watch-progress")
 async def update_watch_progress(
     video_id: int,
-    watch_percentage: float = 0.0,
-    watch_duration: int = 0,
+    body: WatchProgressUpdate,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Update user's watch progress for a video"""
     video_service = VideoService(db)
-    return video_service.update_watch_progress(video_id, current_user.id, watch_percentage, watch_duration)
+    return video_service.update_watch_progress(video_id, current_user.id, body.watch_percentage, body.watch_duration)
 
 
 @router.post("/{video_id}/share")

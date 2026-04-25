@@ -211,15 +211,18 @@ async def get_explore_page(
     if user and user.department:
         department_videos = await rec_service.get_popular_in_department(user.department, 10)
     
-    # Get "because you watched" recommendations
-    because_you_watched = await rec_service.get_similar_videos(
-        current_user.id, 10
-    ) if personalized else []
-    
-    # Get editor's picks (featured videos)
+    # Get "because you watched" — seed from the first personalized video.
+    # BUG WAS: get_similar_videos(current_user.id) passed a USER id as a video id.
+    because_you_watched = []
+    if personalized:
+        seed_video_id = personalized[0].id
+        because_you_watched = await rec_service.get_similar_videos(seed_video_id, 10)
+
+    # Get editor picks (featured approved videos only)
     editor_picks = db.query(Video).filter(
         Video.is_featured,
-        Video.is_published
+        Video.is_published == True,
+        Video.approval_status == "approved"
     ).order_by(Video.created_at.desc()).limit(10).all()
     
     # Convert all to serializable format

@@ -67,7 +67,8 @@ class RecommendationService:
             # Recommend recent videos from enrolled courses
             videos = self.db.query(Video).filter(
                 Video.course_id.in_(course_ids),
-                Video.is_published
+                Video.is_published == True,       # noqa: E712
+                Video.approval_status == "approved"
             ).order_by(desc(Video.created_at)).limit(limit).all()
         else:
             # Recommend trending videos
@@ -127,10 +128,9 @@ class RecommendationService:
     async def get_trending_videos(self, limit: int = 20, days: int = 7) -> List[Video]:
         """Get trending videos based on recent engagement"""
         
-        # Calculate trending score for videos in last N days
-        days_ago = datetime.utcnow() - timedelta(days=days)
+        # Use a wider window so newly uploaded/approved videos appear
+        days_ago = datetime.utcnow() - timedelta(days=max(days, 30))
         
-        # Get videos with engagement metrics
         trending_videos = self.db.query(
             Video,
             (
@@ -140,7 +140,8 @@ class RecommendationService:
             ).label('trending_score')
         ).filter(
             Video.created_at >= days_ago,
-            Video.is_published
+            Video.is_published == True,        # noqa: E712
+            Video.approval_status == "approved"
         ).order_by(
             desc('trending_score')
         ).limit(limit).all()
@@ -165,7 +166,8 @@ class RecommendationService:
             course_videos = self.db.query(Video).filter(
                 Video.course_id == video.course_id,
                 Video.id != video_id,
-                Video.is_published
+                Video.is_published == True,       # noqa: E712
+                Video.approval_status == "approved"
             ).order_by(
                 desc(Video.view_count)
             ).limit(limit).all()
@@ -174,33 +176,38 @@ class RecommendationService:
         
         # If we need more videos, find videos with similar tags
         if len(similar_videos) < limit and video.tags and len(video.tags) > 0:
-            # Get videos that share at least one tag
-            # Since tags is JSON field, we need to search differently
-            
-            # Create a list of tag conditions using JSON operations
+            # Use PostgreSQL JSONB .contains() — works because tags column is JSON/JSONB.
+            # DO NOT use LIKE on a JSON column — that causes "operator does not exist: json ~~ text".
             tag_conditions = []
             for tag in video.tags[:5]:  # Limit to first 5 tags
-                # For PostgreSQL with JSONB
-                if self.db.bind.dialect.name == 'postgresql':
-                    tag_conditions.append(Video.tags.contains([tag]))
-                else:
-                    # For SQLite or other databases, use simple LIKE search
-                    tag_conditions.append(Video.tags.cast(str).ilike(f'%{tag}%'))
+                tag_conditions.append(Video.tags.contains([tag]))
             
             if tag_conditions:
-                tag_matched_videos = self.db.query(Video).filter(
-                    Video.id != video_id,
-                    Video.is_published,
-                    or_(*tag_conditions)
-                ).order_by(
-                    desc(Video.view_count)
-                ).limit(limit - len(similar_videos)).all()
-                
-                # Add videos not already in similar_videos
-                existing_ids = {v.id for v in similar_videos}
-                for v in tag_matched_videos:
-                    if v.id not in existing_ids:
-                        similar_videos.append(v)
+                try:
+                    tag_matched_videos = self.db.query(Video).filter(
+                        Video.id != video_id,
+                        Video.is_published == True,   # noqa: E712 — bare column generates wrong SQL
+                        Video.approval_status == "approved",
+                        or_(*tag_conditions)
+                    ).order_by(
+                        desc(Video.view_count)
+                    ).limit(limit - len(similar_videos)).all()
+
+                    # Add videos not already in similar_videos
+                    existing_ids = {v.id for v in similar_videos}
+                    for v in tag_matched_videos:
+                        if v.id not in existing_ids:
+                            similar_videos.append(v)
+                except Exception as e:
+                    # CRITICAL: rollback the session after any DB error.
+                    # Without this, PostgreSQL marks the whole connection as aborted
+                    # and every subsequent query on this session fails with
+                    # "InFailedSqlTransaction: current transaction is aborted".
+                    try:
+                        self.db.rollback()
+                    except Exception:
+                        pass
+                    print(f"Tag search skipped (non-fatal): {e}")
         
         # If still not enough, add trending videos as fallback
         if len(similar_videos) < limit:
@@ -287,7 +294,8 @@ class RecommendationService:
         
         fresh_videos = self.db.query(Video).filter(
             Video.created_at >= hours_ago,
-            Video.is_published
+            Video.is_published == True,       # noqa: E712
+            Video.approval_status == "approved"
         ).order_by(
             desc(Video.created_at)
         ).limit(limit).all()

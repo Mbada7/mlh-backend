@@ -497,10 +497,20 @@ class VideoService:
         self.db.refresh(comment)
         
         user = self.db.query(User).filter(User.id == user_id).first()
-        comment.username = user.username
-        comment.user_profile_picture = user.profile_picture
-        
-        return comment
+
+        # Return a dict so Pydantic gets replies=[] instead of None
+        # (the ORM relationship is not eagerly loaded, so replies would be None
+        #  and cause a ResponseValidationError: "Input should be a valid list")
+        return {
+            "id": comment.id,
+            "content": comment.content,
+            "user_id": comment.user_id,
+            "username": user.username if user else "Unknown",
+            "user_profile_picture": user.profile_picture if user else None,
+            "like_count": comment.like_count,
+            "created_at": comment.created_at,
+            "replies": [],
+        }
     
     def get_comments(self, video_id: int, skip: int = 0, limit: int = 50) -> List[dict]:
         """Get comments for video with user info"""
@@ -567,10 +577,11 @@ class VideoService:
         return {"message": "Comment deleted successfully"}
     
     def get_user_videos(self, user_id: int, skip: int = 0, limit: int = 50) -> List[Video]:
-        """Get all videos uploaded by a user"""
+        """Get all videos uploaded by a user (including pending ones)"""
         videos = self.db.query(Video).filter(
-            Video.uploaded_by_user_id == user_id,
-            Video.is_published
+            Video.uploaded_by_user_id == user_id
+            # DO NOT filter by is_published — student uploads are pending (is_published=False)
+            # and should still appear in the uploader's own My Videos list
         ).order_by(desc(Video.created_at)).offset(skip).limit(limit).all()
         
         return videos
@@ -663,17 +674,37 @@ class VideoService:
         return {"message": "Video approved" if approved else "Video rejected", "status": video.approval_status}
     
     def get_pending_videos(self, lecturer_id: int, skip: int = 0, limit: int = 50) -> List[Video]:
-        """Get pending videos for lecturer's courses"""
+        """Get pending videos for lecturer's courses.
+        
+        Shows ALL pending videos in courses this lecturer teaches.
+        Also shows pending videos with no course (uploaded by students without a course link)
+        if the caller is an admin (lecturer_id=0 used as sentinel).
+        """
+        from app.models.user import User as UserModel
+        lecturer = self.db.query(UserModel).filter(UserModel.id == lecturer_id).first()
+        role = ""
+        if lecturer:
+            role = lecturer.role.value if hasattr(lecturer.role, "value") else str(lecturer.role)
+
+        if role == "admin":
+            # Admins see all pending videos
+            pending_videos = self.db.query(Video).filter(
+                Video.approval_status == "pending",
+                Video.is_published == False  # noqa: E712
+            ).order_by(Video.created_at).offset(skip).limit(limit).all()
+            return pending_videos
+
+        # Lecturers: find their courses
         courses = self.db.query(Course).filter(Course.lecturer_id == lecturer_id).all()
         course_ids = [c.id for c in courses]
-        
+
         if not course_ids:
             return []
-        
+
         pending_videos = self.db.query(Video).filter(
             Video.course_id.in_(course_ids),
             Video.approval_status == "pending",
-            not Video.is_published
+            Video.is_published == False  # noqa: E712
         ).order_by(Video.created_at).offset(skip).limit(limit).all()
-        
+
         return pending_videos

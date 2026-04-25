@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -241,22 +242,25 @@ async def upload_profile_picture(
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     
-    # Save file
-    upload_dir = f"uploads/profiles/{current_user.id}"
+    # Save using absolute path — relative paths break on Windows + don't survive restarts
+    base_upload_dir = settings.ABSOLUTE_STORAGE_PATH
+    upload_dir = os.path.join(base_upload_dir, "profiles", str(current_user.id))
     os.makedirs(upload_dir, exist_ok=True)
-    
+
     file_extension = file.filename.split('.')[-1]
     filename = f"{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(upload_dir, filename)
-    
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
-    # Update user profile
-    current_user.profile_picture = f"/{file_path}"
+
+    # Store absolute path in DB; return a URL the mobile app can display
+    base_url = settings.BACKEND_URL.rstrip('/')
+    profile_url = f"{base_url}/api/v1/users/me/avatar/{current_user.id}/{filename}"
+    current_user.profile_picture = file_path
     db.commit()
-    
-    return {"profile_picture_url": current_user.profile_picture}
+
+    return {"profile_picture_url": profile_url}
 
 @router.get("/me/bookmarks")
 async def get_bookmarks(
@@ -396,3 +400,11 @@ async def get_my_videos(
             "approval_status": video.approval_status,
         })
     return result
+
+@router.get("/me/avatar/{user_id}/{filename}")
+async def serve_avatar(user_id: int, filename: str):
+    """Serve a user profile picture by absolute path lookup"""
+    file_path = os.path.join(settings.ABSOLUTE_STORAGE_PATH, "profiles", str(user_id), filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Profile picture not found")
+    return FileResponse(path=file_path, media_type="image/jpeg")
