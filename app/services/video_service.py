@@ -109,6 +109,35 @@ class VideoService:
         # Parse tags
         tag_list = tags or []
         
+        # ── AI Educational Content Detection ─────────────────────────────
+        try:
+            from app.services.content_detection import predict_educational
+            ai_result = predict_educational(absolute_path)
+            if not ai_result["is_educational"]:
+                # Delete the saved file so it doesn't waste disk space
+                try:
+                    os.remove(absolute_path)
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "error": "content_rejected",
+                        "message": ai_result["rejection_reason"],
+                        "confidence": ai_result["confidence"],
+                        "method": ai_result["method"],
+                    }
+                )
+            ai_confidence = ai_result["confidence"]
+            ai_method     = ai_result["method"]
+        except HTTPException:
+            raise
+        except Exception as ai_err:
+            # Detection failure is non-fatal — log and continue
+            print(f"[AI detection error — non-fatal]: {ai_err}")
+            ai_confidence = None
+            ai_method     = "error"
+
         # Generate thumbnail using absolute path
         thumbnail_path = self._generate_thumbnail(absolute_path, user_id)
         

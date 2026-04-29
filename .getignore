@@ -1,0 +1,24 @@
+# Environment
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Uploads (local files)
+uploads/
+
+# ML Models (too large for GitHub)
+ml_models/
+*.pkl
+*.h5
+*.pt
+*.pth
+
+# OS files
+.DS_Store
+Thumbs.db

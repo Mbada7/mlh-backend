@@ -408,3 +408,36 @@ async def serve_avatar(user_id: int, filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Profile picture not found")
     return FileResponse(path=file_path, media_type="image/jpeg")
+
+@router.get("/me/liked-videos")
+async def get_liked_videos(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    from app.models.interaction import UserVideoInteraction
+    from app.core.config import settings
+    base_url = settings.BACKEND_URL.rstrip('/')
+    interactions = db.query(UserVideoInteraction).filter(
+        UserVideoInteraction.user_id == current_user.id,
+        UserVideoInteraction.liked == True
+    ).offset(skip).limit(limit).all()
+    result = []
+    for i in interactions:
+        video = db.query(Video).filter(Video.id == i.video_id, Video.is_published == True).first()
+        if not video:
+            continue
+        uploader = db.query(User).filter(User.id == video.uploaded_by_user_id).first()
+        result.append({
+            "id": video.id, "title": video.title, "description": video.description,
+            "video_url": f"{base_url}/api/v1/videos/stream/{video.id}",
+            "thumbnail_url": f"{base_url}/api/v1/videos/thumbnail/{video.id}" if video.thumbnail_url else None,
+            "duration": video.duration, "view_count": video.view_count, "like_count": video.like_count,
+            "comment_count": video.comment_count, "share_count": video.share_count,
+            "course_id": video.course_id, "uploaded_by_user_id": video.uploaded_by_user_id,
+            "uploader_name": uploader.full_name if uploader else "Unknown",
+            "tags": video.tags or [], "is_published": video.is_published,
+            "is_featured": video.is_featured, "created_at": video.created_at,
+        })
+    return result
